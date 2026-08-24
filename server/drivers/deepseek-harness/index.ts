@@ -238,14 +238,14 @@ export const DeepSeekHarnessDriver: ProviderDriver<DeepSeekHarnessConfig> = {
       || method === "tool/call"
       || method === "tool/result"
     );
-    const retireHostTurn = (running: ActiveTurn) => {
+    const retireHostTurn = (running: ActiveTurn, includeUnknown = true) => {
       if (!running.sessionId) return;
       const previous = retiredHostTurns.get(running.sessionId);
       if (running.hostTurn !== undefined) {
         retiredHostTurns.set(running.sessionId, previous === null || previous === undefined
           ? running.hostTurn
           : Math.max(previous, running.hostTurn));
-      } else if (!retiredHostTurns.has(running.sessionId)) {
+      } else if (includeUnknown && !retiredHostTurns.has(running.sessionId)) {
         retiredHostTurns.set(running.sessionId, null);
       }
     };
@@ -601,6 +601,7 @@ export const DeepSeekHarnessDriver: ProviderDriver<DeepSeekHarnessConfig> = {
           running.queueFrames = [];
           running.queueFrameBytes = 0;
           running.settleStartup();
+          retireHostTurn(running);
           await cancelRunning(running);
           throw new Error("DeepSeek Harness queue submission event buffer overflowed");
         }
@@ -695,6 +696,7 @@ export const DeepSeekHarnessDriver: ProviderDriver<DeepSeekHarnessConfig> = {
         running.completed = true;
         running.cancelled = true;
         running.failReady();
+        retireHostTurn(running, false);
         if (active.get(threadId) === running) active.delete(threadId);
       }
       await Promise.allSettled(lost.map(([, running]) => running.sessionId
